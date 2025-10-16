@@ -27,7 +27,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, totp: needsTotp ? (totp || undefined) : undefined }),
+        body: JSON.stringify({ email, password, totp: needsTotp ? totp : undefined }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -39,9 +39,15 @@ export default function LoginPage() {
         }
         return;
       }
-      const key = await deriveKey(password, data.encryptionSalt);
-      setSaltAndKey(data.encryptionSalt, key);
-      router.push("/vault");
+      try {
+        const key = await deriveKey(password, data.encryptionSalt);
+        setSaltAndKey(data.encryptionSalt, key);
+        router.push("/vault");
+      } catch (cryptoErr) {
+        const cryptoMessage = cryptoErr instanceof Error ? cryptoErr.message : "Crypto operation failed";
+        setError(`Encryption error: ${cryptoMessage}`);
+        return;
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unexpected error";
       setError(message);
@@ -71,7 +77,7 @@ export default function LoginPage() {
             {needsTotp && (
               <div className="grid gap-1">
                 <Label htmlFor="totp">TOTP code</Label>
-                <Input id="totp" type="text" inputMode="numeric" pattern="\\d{6}" placeholder="123456" value={totp} onChange={(e) => setTotp(e.target.value)} required />
+                <Input id="totp" type="text" inputMode="numeric" pattern="\d{6}" placeholder="123456" value={totp} onChange={(e) => setTotp(e.target.value)} required />
                 <p className="text-xs text-muted-foreground">Open your authenticator app and enter the current 6-digit code.</p>
               </div>
             )}
