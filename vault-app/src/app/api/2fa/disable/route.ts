@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb, getCollections } from '@/lib/db';
+import { getSupabase } from '@/lib/supabase';
 import { getSession } from '@/lib/auth';
-import { ObjectId } from 'mongodb';
 
 export async function POST(req: NextRequest) {
   const session = getSession(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const db = await getDb();
-  const { users } = getCollections(db);
-  await users.updateOne(
-    { _id: new ObjectId(session.userId) },
-    { $set: { twoFAEnabled: false }, $unset: { totpSecret: '' } }
-  );
+  const supabase = getSupabase();
+  const { error } = await supabase
+    .from('users')
+    .update({ twoFAEnabled: false, totpSecret: null })
+    .eq('id', session.userId);
+  if (error) return NextResponse.json({ error: 'Failed to disable 2FA' }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

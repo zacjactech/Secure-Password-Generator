@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDb, getCollections } from '@/lib/db';
+import { getSupabase, UserRow } from '@/lib/supabase';
 import { verifyPassword, createSessionToken, setSessionCookie } from '@/lib/auth';
 import { authenticator } from 'otplib';
 
@@ -12,10 +12,15 @@ export async function POST(req: Request) {
     if (!email || !password) {
       return NextResponse.json({ error: 'Missing credentials' }, { status: 400 });
     }
-
-    const db = await getDb();
-    const { users } = getCollections(db);
-    const user = await users.findOne({ email });
+    const supabase = getSupabase();
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .maybeSingle<UserRow>();
+    if (error) {
+      return NextResponse.json({ error: 'Login failed' }, { status: 500 });
+    }
     if (!user) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
@@ -36,7 +41,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const token = createSessionToken({ userId: String(user._id), email });
+    const token = createSessionToken({ userId: String(user.id), email });
     const res = NextResponse.json({ ok: true, encryptionSalt: user.encryptionSalt });
     setSessionCookie(res, token);
     return res;

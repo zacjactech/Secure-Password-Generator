@@ -27,20 +27,46 @@ Open [http://localhost:3000](http://localhost:3000) with your browser.
 
 ### Environment
 
-Create a `.env.local` file:
+Create a `.env.local` file with Supabase and app settings:
 
 ```
-MONGODB_URI=
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+# For local dev without service role, you can use:
+# SUPABASE_ANON_KEY=
+
 JWT_SECRET=
 BCRYPT_ROUNDS=12
 ```
 
+- `SUPABASE_SERVICE_ROLE_KEY` is recommended for server-side inserts/updates. Do not expose it to the client.
+- `JWT_SECRET` is used for the app’s own session cookie.
+
 ### Quickstart
 
 1. `pnpm install`
-2. Set `.env.local` values (MongoDB Atlas URI, a random `JWT_SECRET`).
-3. `pnpm dev`
-4. Visit `/signup` then `/vault` to create, search, copy, edit, and delete items.
+2. Create tables in Supabase using `supabase/schema.sql` (run in Supabase SQL editor):
+   - `users`: email, passwordHash, encryptionSalt, twoFAEnabled, totpSecret
+   - `vault_items`: userId FK, ciphertext, iv, title, tags, timestamps
+3. Set `.env.local` values (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, a random `JWT_SECRET`).
+4. `pnpm dev`
+5. Visit `/signup` then `/vault` to create, search, copy, edit, and delete items.
+
+### Migrating from MongoDB
+
+If you have existing data in MongoDB, use the migration script:
+
+```
+# Ensure MONGODB_URI, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY are set in environment
+pnpm tsx vault-app/scripts/migrate-to-supabase.ts
+
+# Dry run (no writes)
+DRY_RUN=1 pnpm tsx vault-app/scripts/migrate-to-supabase.ts
+```
+
+- Users receive new UUIDs; the script preserves relationships by mapping old user IDs to new ones.
+- Vault items are inserted with new UUIDs and linked via the mapped user IDs.
+- After migration, remove MongoDB settings and confirm app reads/writes from Supabase.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

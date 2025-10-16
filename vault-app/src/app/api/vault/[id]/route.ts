@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb, getCollections } from '@/lib/db';
+import { getSupabase } from '@/lib/supabase';
 import { getSession } from '@/lib/auth';
-import { ObjectId } from 'mongodb';
 
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
@@ -14,12 +13,19 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   const tags: string[] | undefined = Array.isArray(body?.tags) ? body.tags : undefined;
   if (!ciphertext || !iv) return NextResponse.json({ error: 'Missing data' }, { status: 400 });
 
-  const db = await getDb();
-  const { vaultItems } = getCollections(db);
-  await vaultItems.updateOne(
-    { _id: new ObjectId(id), userId: session.userId },
-    { $set: { ciphertext, iv, title, tags, updatedAt: new Date() } }
-  );
+  const supabase = getSupabase();
+  const { error } = await supabase
+    .from('vault_items')
+    .update({
+      ciphertext,
+      iv,
+      title: title ?? null,
+      tags: tags ?? null,
+      updatedAt: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('userId', session.userId);
+  if (error) return NextResponse.json({ error: 'Failed to update item' }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
 
@@ -27,8 +33,12 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
   const { id } = await ctx.params;
   const session = getSession(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const db = await getDb();
-  const { vaultItems } = getCollections(db);
-  await vaultItems.deleteOne({ _id: new ObjectId(id), userId: session.userId });
+  const supabase = getSupabase();
+  const { error } = await supabase
+    .from('vault_items')
+    .delete()
+    .eq('id', id)
+    .eq('userId', session.userId);
+  if (error) return NextResponse.json({ error: 'Failed to delete item' }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

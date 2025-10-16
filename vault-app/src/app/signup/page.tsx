@@ -41,7 +41,8 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto">
+    <div className="min-h-[60vh] grid place-items-center px-4">
+      <div className="max-w-md w-full">
       <Card>
         <CardHeader>
           <CardTitle>Create account</CardTitle>
@@ -69,6 +70,7 @@ export default function SignupPage() {
           </Button>
         </CardFooter>
       </Card>
+      </div>
     </div>
   );
 }

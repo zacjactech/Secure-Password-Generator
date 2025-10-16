@@ -51,7 +51,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto">
+    <div className="min-h-[60vh] grid place-items-center px-4">
+      <div className="max-w-md w-full">
       <Card>
         <CardHeader>
           <CardTitle>Login</CardTitle>
@@ -86,6 +87,7 @@ export default function LoginPage() {
           </Button>
         </CardFooter>
       </Card>
+      </div>
     </div>
   );
 }

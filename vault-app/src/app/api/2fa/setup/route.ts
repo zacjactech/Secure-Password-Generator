@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb, getCollections } from '@/lib/db';
+import { getSupabase } from '@/lib/supabase';
 import { getSession } from '@/lib/auth';
-import { ObjectId } from 'mongodb';
 import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
 
@@ -9,14 +8,16 @@ export async function POST(req: NextRequest) {
   const session = getSession(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const db = await getDb();
-  const { users } = getCollections(db);
+  const supabase = getSupabase();
   const secret = authenticator.generateSecret();
   const label = `${session.email}`;
   const issuer = 'Secure Password Vault';
   const otpauth = authenticator.keyuri(label, issuer, secret);
   const qrDataUrl = await QRCode.toDataURL(otpauth);
-
-  await users.updateOne({ _id: new ObjectId(session.userId) }, { $set: { totpSecret: secret, twoFAEnabled: false } });
+  const { error } = await supabase
+    .from('users')
+    .update({ totpSecret: secret, twoFAEnabled: false })
+    .eq('id', session.userId);
+  if (error) return NextResponse.json({ error: 'Failed to setup 2FA' }, { status: 500 });
   return NextResponse.json({ secret, otpauth, qr: qrDataUrl });
 }
