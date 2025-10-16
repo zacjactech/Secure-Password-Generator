@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Key, useEffect, useMemo, useState, useRef } from "react";
 import Image from "next/image";
 import PasswordGenerator from "@/components/PasswordGenerator";
 import SearchBar from "@/components/SearchBar";
@@ -9,7 +9,7 @@ import { useCrypto } from "@/context/CryptoContext";
 import { CryptoUtils } from "@/lib/crypto";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Copy as CopyIcon, Check as CheckIcon, Trash2, Settings as SettingsIcon, Upload, Download, Shield, Eye, EyeOff, ExternalLink, Files } from "lucide-react";
@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 type EncryptedItem = {
+  id: Key | null | undefined;
   _id: string;
   ciphertext: string;
   iv: string;
@@ -52,6 +53,7 @@ export default function VaultPage() {
   const [qr, setQr] = useState<string | null>(null);
   const [totpCode, setTotpCode] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
   const [importExportOpen, setImportExportOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -66,6 +68,7 @@ export default function VaultPage() {
       const res = await fetch('/api/vault');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load');
+      console.log('Loaded items from API:', data.items);
       setItems(data.items);
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Unexpected error';
@@ -132,6 +135,14 @@ export default function VaultPage() {
     }
     })();
   }, [settingsOpen]);
+
+  // Focus delete button when delete dialog opens
+  useEffect(() => {
+    if (confirmDeleteId && deleteButtonRef.current) {
+      console.log('Focusing delete button for item:', confirmDeleteId);
+      deleteButtonRef.current.focus();
+    }
+  }, [confirmDeleteId]);
 
   const start2FASetup = async () => {
     setTwoFALoading(true);
@@ -230,10 +241,20 @@ export default function VaultPage() {
   };
 
   const deleteItem = async (id: string) => {
-    const res = await fetch(`/api/vault/${id}`, { method: 'DELETE' });
-    const data = await res.json();
-    if (!res.ok) return alert(data.error || 'Failed to delete');
-    await load();
+    console.log('Attempting to delete item with ID:', id);
+    try {
+      const res = await fetch(`/api/vault/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) {
+        console.error('Failed to delete item:', data.error);
+        return alert(data.error || 'Failed to delete');
+      }
+      console.log('Item deleted successfully');
+      await load();
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      alert('Error deleting item');
+    }
   };
 
   const copyFieldToClipboard = async (ciphertext: string, iv: string, field: string, itemId: string) => {
@@ -384,6 +405,7 @@ export default function VaultPage() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Import / Export</DialogTitle>
+                <DialogDescription>Manage your vault data by importing or exporting encrypted JSON files.</DialogDescription>
               </DialogHeader>
               <div className="space-y-3">
                 <div>
@@ -452,6 +474,7 @@ export default function VaultPage() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Settings</DialogTitle>
+                <DialogDescription>Configure your vault settings and security preferences.</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
@@ -490,6 +513,7 @@ export default function VaultPage() {
                         <DialogContent>
                           <DialogHeader>
                             <DialogTitle>Disable Two-Factor Authentication?</DialogTitle>
+                            <DialogDescription>This will remove the extra security layer from your account.</DialogDescription>
                           </DialogHeader>
                           <p className="text-sm text-muted-foreground">You will no longer be asked for a 6-digit code when logging in.</p>
                           <div className="flex gap-2 justify-end">
@@ -553,6 +577,7 @@ export default function VaultPage() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>New Vault Item</DialogTitle>
+                <DialogDescription>Add a new password or secure item to your vault.</DialogDescription>
               </DialogHeader>
               <VaultItemForm onSubmit={addItem} onCancel={() => setAddOpen(false)} />
             </DialogContent>
@@ -566,7 +591,7 @@ export default function VaultPage() {
         <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredItems.map((it) => (
             <li key={it._id}>
-              <Card>
+              <Card key={it._id}>
                 <CardContent className="p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
@@ -593,12 +618,12 @@ export default function VaultPage() {
                     </div>
                     <div className="flex items-center relative">
                       <DropdownMenu>
-                        <DropdownMenuTrigger className="cursor-pointer focus:outline-none">
+                        <DropdownMenuTrigger asChild className="cursor-pointer focus:outline-none">
                           <Button variant="outline" size="icon" aria-label="Actions" title="Item actions" className="hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring">
                             <MoreHorizontal className="h-4 w-4 pointer-events-none" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="z-50">
+                        <DropdownMenuContent align="end" className="z-50" onCloseAutoFocus={(e) => e.preventDefault()}>
                           <DropdownMenuItem key={`copy-password-${it._id}`} title="Copy password to clipboard" onSelect={async () => {
                             await copyFieldToClipboard(it.ciphertext, it.iv, 'password', it._id);
                           }}>
@@ -658,7 +683,11 @@ export default function VaultPage() {
                           
                           <DropdownMenuSeparator key={`separator-3-${it._id}`} />
                           
-                          <DropdownMenuItem key={`delete-item-${it._id}`} title="Delete this item" onSelect={() => setConfirmDeleteId(it._id)} className="text-destructive">
+                          <DropdownMenuItem key={`delete-item-${it._id}`} title="Delete this item" onSelect={() => { 
+                            console.log('Delete menu item clicked for item:', it._id); 
+                            console.log('Full item object:', it); 
+                            setConfirmDeleteId(it._id); 
+                          }} className="text-destructive">
                             <Trash2 className="h-4 w-4 mr-2" />
                             Delete
                           </DropdownMenuItem>
@@ -673,31 +702,55 @@ export default function VaultPage() {
         </ul>
       )}
       
-      {/* Edit and Delete Dialogs - moved outside the list for better performance */}
-      {filteredItems.map((it) => (
-        <React.Fragment key={`dialog-fragment-${it._id}`}>
+      {/* Edit Dialogs - moved outside the list for better performance */}
+      {filteredItems.map((it, index) => (
+        <React.Fragment key={it._id || `dialog-fragment-${index}`}>
           <Dialog key={`edit-dialog-${it._id}`} open={editId === it._id} onOpenChange={(open) => setEditId(open ? it._id : null)}>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Edit Vault Item</DialogTitle>
+                <DialogDescription>Update the details of your vault item.</DialogDescription>
               </DialogHeader>
               <InlineEdit id={it._id} ciphertext={it.ciphertext} iv={it.iv} title={it.title} tags={it.tags} onSave={editItem} />
             </DialogContent>
           </Dialog>
-          <Dialog key={`delete-dialog-${it._id}`} open={confirmDeleteId === it._id} onOpenChange={(open) => setConfirmDeleteId(open ? it._id : null)}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Delete this item?</DialogTitle>
-              </DialogHeader>
-              <p className="text-sm text-muted-foreground">This action cannot be undone. The item will be permanently removed.</p>
-              <div className="flex gap-2 justify-end">
-                  <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
-                  <Button variant="destructive" onClick={async () => { if (confirmDeleteId) { await deleteItem(confirmDeleteId); setConfirmDeleteId(null);} }}>Delete</Button>
-                </div>
-            </DialogContent>
-          </Dialog>
         </React.Fragment>
       ))}
+      
+      {/* Single Delete Dialog for all items */}
+        <Dialog open={!!confirmDeleteId} onOpenChange={(open) => {
+          console.log('Delete dialog open state changed:', open);
+          if (!open) setConfirmDeleteId(null);
+        }}>
+        <DialogContent className="z-50">
+          <DialogHeader>
+            <DialogTitle>Delete this item?</DialogTitle>
+            <DialogDescription>This action will permanently remove the item from your vault.</DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">This action cannot be undone. The item will be permanently removed.</p>
+          <div className="flex gap-2 justify-end mt-4">
+              <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
+              <Button 
+                   ref={deleteButtonRef}
+                   variant="destructive" 
+                   onClick={(e) => { 
+                     console.log('Delete button clicked, confirmDeleteId:', confirmDeleteId);
+                     console.log('Event:', e);
+                     console.log('Button element:', e.target);
+                     const itemId = confirmDeleteId;
+                     if (itemId) { 
+                       deleteItem(itemId); 
+                       setConfirmDeleteId(null);
+                     } 
+                   }}
+                   className="hover:bg-destructive/90 focus:outline-none focus:ring-2 focus:ring-destructive focus:ring-offset-2"
+                   disabled={!confirmDeleteId}
+                 >
+                   Delete
+                 </Button>
+            </div>
+        </DialogContent>
+      </Dialog>
       
       {/* Re-authentication modal when encryption key is lost */}
       <ReauthModal isOpen={needsReauth} onClose={() => {}} />

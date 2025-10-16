@@ -31,10 +31,12 @@ export const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-1/2 top-1/2 z-50 grid w-[90vw] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border border-border bg-popover p-6 shadow-lg",
+        "fixed left-1/2 top-1/2 z-[51] grid w-[90vw] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border border-border bg-popover p-6 shadow-lg",
         "rounded-[var(--radius)]",
         className
       )}
+      role="dialog"
+      aria-modal="true"
       {...props}
     >
       {children}

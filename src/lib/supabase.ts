@@ -6,8 +6,11 @@ export function getSupabase(): SupabaseClient {
   if (client) return client;
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    throw new Error('Supabase environment not configured: set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
+  if (!url) {
+    throw new Error('Supabase environment not configured: set SUPABASE_URL');
+  }
+  if (!key) {
+    throw new Error('Supabase environment not configured: set SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY');
   }
   client = createClient(url, key, {
     auth: { persistSession: false },

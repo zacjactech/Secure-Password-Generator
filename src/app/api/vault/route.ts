@@ -12,8 +12,18 @@ export async function GET(req: NextRequest) {
     .select('*')
     .eq('userId', session.userId)
     .order('updatedAt', { ascending: false }) as { data: VaultItemRow[]; error: PostgrestError | null };
-  if (error) return NextResponse.json({ error: 'Failed to fetch items' }, { status: 500 });
-  return NextResponse.json({ items: items || [] });
+  if (error) {
+    console.error('Supabase error fetching vault items:', error);
+    return NextResponse.json({ error: 'Failed to fetch items' }, { status: 500 });
+  }
+  // Map database id to _id to match frontend expectations
+  const mappedItems = (items || []).map(item => ({
+    ...item,
+    _id: item.id,
+    id: undefined // Remove the original id field to avoid confusion
+  }));
+  
+  return NextResponse.json({ items: mappedItems });
 }
 
 export async function POST(req: NextRequest) {
