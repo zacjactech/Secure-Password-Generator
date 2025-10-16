@@ -2,7 +2,7 @@
 -- Run in Supabase SQL editor or via CLI
 
 -- Enable pgcrypto for UUID generation if needed
--- create extension if not exists pgcrypto;
+create extension if not exists pgcrypto;
 
 create table if not exists users (
   id uuid primary key default gen_random_uuid(),
