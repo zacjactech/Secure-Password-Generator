@@ -9,24 +9,32 @@ export async function POST(req: Request) {
     const email = String(body?.email || '').trim().toLowerCase();
     const password = String(body?.password || '');
     const totp = body?.totp ? String(body.totp) : undefined;
+    
+    console.log(`Login attempt for email: ${email}`);
+    
     if (!email || !password) {
+      console.log('Login failed: Missing credentials');
       return NextResponse.json({ error: 'Missing credentials' }, { status: 400 });
     }
     const supabase = getSupabase();
+    console.log('Attempting to query users table...');
     const { data: user, error } = await supabase
       .from('users')
       .select('*')
       .eq('email', email)
       .maybeSingle<UserRow>();
     if (error) {
+      console.log('Database error:', error);
       return NextResponse.json({ error: 'Login failed' }, { status: 500 });
     }
     if (!user) {
+      console.log(`Login attempt failed: User not found for email: ${email}`);
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) {
+      console.log(`Login attempt failed: Invalid password for email: ${email}`);
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
