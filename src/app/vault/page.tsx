@@ -4,6 +4,7 @@ import Image from "next/image";
 import PasswordGenerator from "@/components/PasswordGenerator";
 import SearchBar from "@/components/SearchBar";
 import VaultItemForm from "@/components/VaultItemForm";
+import ReauthModal from "@/components/ReauthModal";
 import { useCrypto } from "@/context/CryptoContext";
 import { CryptoUtils } from "@/lib/crypto";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Copy as CopyIcon, Check as CheckIcon, Trash2, Settings as SettingsIcon, Upload, Download } from "lucide-react";
+import { MoreHorizontal, Copy as CopyIcon, Check as CheckIcon, Trash2, Settings as SettingsIcon, Upload, Download, Shield } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -35,7 +36,7 @@ type PlainItem = {
 };
 
 export default function VaultPage() {
-  const { key } = useCrypto();
+  const { key, needsReauth } = useCrypto();
   const [items, setItems] = useState<EncryptedItem[]>([]);
   const [query, setQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
@@ -184,6 +185,10 @@ export default function VaultPage() {
     }
   };
 
+  const open2FASettings = () => {
+    setSettingsOpen(true);
+  };
+
   // Remove unused placeholder decrypted memo
 
   const filteredItems = useMemo(() => {
@@ -251,6 +256,10 @@ export default function VaultPage() {
             <Switch id="encrypt-titles" checked={encryptTitles} onCheckedChange={setEncryptTitles} />
             <Label htmlFor="encrypt-titles" className="text-sm">Encrypt titles</Label>
           </div>
+          <Button variant="outline" onClick={open2FASettings}>
+            <Shield className="h-4 w-4 mr-1" />
+            2FA
+          </Button>
           <Dialog open={importExportOpen} onOpenChange={setImportExportOpen}>
             <DialogTrigger asChild>
               <Button variant="outline">
@@ -551,6 +560,9 @@ export default function VaultPage() {
           ))}
         </ul>
       )}
+      
+      {/* Re-authentication modal when encryption key is lost */}
+      <ReauthModal isOpen={needsReauth} onClose={() => {}} />
     </div>
   );
 }

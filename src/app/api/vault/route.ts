@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase, VaultItemRow } from '@/lib/supabase';
 import { getSession } from '@/lib/auth';
+import { PostgrestError } from '@supabase/supabase-js';
 
 export async function GET(req: NextRequest) {
   const session = getSession(req);
@@ -10,7 +11,7 @@ export async function GET(req: NextRequest) {
     .from('vault_items')
     .select('*')
     .eq('userId', session.userId)
-    .order('updatedAt', { ascending: false }) as { data: VaultItemRow[]; error: any };
+    .order('updatedAt', { ascending: false }) as { data: VaultItemRow[]; error: PostgrestError | null };
   if (error) return NextResponse.json({ error: 'Failed to fetch items' }, { status: 500 });
   return NextResponse.json({ items: items || [] });
 }
