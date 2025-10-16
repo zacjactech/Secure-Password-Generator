@@ -1,0 +1,99 @@
+Our social media: https://in.linkedin.com/company/web-development-company-top
+Founder: https://in.linkedin.com/in/setu-agrawal-1032681aa
+Assignment: Password Generator + Secure Vault (MVP)
+
+Tech stack: front end: next js (!imp)
+database:Mongo
+Backed: either next js or Node js (as per your suitability)
+
+Also use typescript if favroble to write code!
+
+Goal
+Build a small web app where a user can:
+Generate a strong password
+
+
+Save it to a personal vault
+
+
+View / edit / delete saved entries in a clean panel
+
+
+Keep it fast, simple, and privacy-first.
+Must-haves
+Password generator (length slider, include numbers/letters/symbols, exclude look-alikes).
+
+
+Simple auth (email + password).
+
+
+Vault items: title, username, password, URL, notes.
+
+
+Client-side encryption for vault items (you can pick the library), so server never stores plaintext.
+
+
+Copy to clipboard with auto-clear.
+
+
+Basic search/filter in the list.
+
+
+Nice-to-have (optional)
+2FA (TOTP)
+
+
+Tags/folders
+
+
+Dark mode
+
+
+Export/import (encrypted file)
+
+
+Constraints (light)
+Any stack is fine. Prefer TypeScript if you’re comfortable.
+
+
+Host anywhere free.
+
+
+Keep UI minimal and fast (no heavy themes).
+
+
+No secrets in logs.
+
+
+Deliverables
+Live demo URL
+
+
+Repo link with README (how to run)
+
+
+Short note: what you used for crypto and why (2–3 lines)
+
+
+60–90 sec screen-record showing the flow (generate → save → search → edit → delete)
+
+
+Acceptance (quick)
+I can sign up, log in, add an item, and see only encrypted blobs in the DB/network.
+
+
+Generator works and feels instant.
+
+
+Copy clears itself after ~10–20s.
+
+
+Basic search returns expected items.
+
+
+Timebox
+3–5 working days. Ship a rough version early; polish after.
+
+
+Inspiration (optional mention)
+

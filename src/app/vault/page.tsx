@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import PasswordGenerator from "@/components/PasswordGenerator";
 import SearchBar from "@/components/SearchBar";
@@ -237,6 +237,7 @@ export default function VaultPage() {
   };
 
   const copyFieldToClipboard = async (ciphertext: string, iv: string, field: string, itemId: string) => {
+    console.log('copyFieldToClipboard called:', { field, itemId });
     if (!key) return alert('No encryption key in memory. Please login again.');
     try {
       const plain = await CryptoUtils.decryptItem(ciphertext, iv, key);
@@ -251,6 +252,7 @@ export default function VaultPage() {
       await navigator.clipboard.writeText(value);
       setCopiedId(itemId);
       setCopiedField(field);
+      console.log('Field copied successfully:', field);
       setTimeout(() => {
         setCopiedId(null);
         setCopiedField(null);
@@ -264,12 +266,14 @@ export default function VaultPage() {
           } catch {} 
         }, 12000);
       }
-    } catch {
+    } catch (error) {
+      console.error('Failed to decrypt:', error);
       alert('Failed to decrypt');
     }
   };
 
   const togglePasswordVisibility = async (ciphertext: string, iv: string, itemId: string) => {
+    console.log('togglePasswordVisibility called:', itemId);
     if (!key) return alert('No encryption key in memory. Please login again.');
     
     if (revealedPasswords[itemId]) {
@@ -279,6 +283,7 @@ export default function VaultPage() {
         delete newState[itemId];
         return newState;
       });
+      console.log('Password hidden for:', itemId);
     } else {
       // Reveal password
       try {
@@ -459,9 +464,9 @@ export default function VaultPage() {
                       <div className="font-medium">Two-Factor Authentication (TOTP)</div>
                       <div className="text-sm text-muted-foreground">Protect login with a 6-digit code from an authenticator app.</div>
                       <ul className="text-sm text-muted-foreground list-disc ml-4 mt-1">
-                        <li>Use Google Authenticator, Authy, or 1Password.</li>
-                        <li>Scan the QR and enter the current code to enable.</li>
-                        <li>Keep recovery options handy in case you lose access.</li>
+                        <li key="authenticator-app">Use Google Authenticator, Authy, or 1Password.</li>
+                        <li key="scan-qr">Scan the QR and enter the current code to enable.</li>
+                        <li key="recovery-options">Keep recovery options handy in case you lose access.</li>
                       </ul>
                     </div>
                     {twoFAEnabled ? (
@@ -541,46 +546,6 @@ export default function VaultPage() {
               </div>
             </DialogContent>
           </Dialog>
-          <Button variant="outline" onClick={async () => {
-            const res = await fetch('/api/export', { method: 'POST' });
-            const data = await res.json();
-            const blob = new Blob([JSON.stringify(data.export, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'vault-export.json';
-            a.click();
-            URL.revokeObjectURL(url);
-          }}>Export</Button>
-          <Button variant="outline" asChild>
-            <label className="cursor-pointer">
-              Import
-              <input 
-                id="vault-export-import-file" 
-                name="vault-export-import-file" 
-                type="file" 
-                accept="application/json" 
-                className="hidden" 
-                onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              const text = await file.text();
-              try {
-                const json = JSON.parse(text);
-                const items: EncryptedItem[] = json.items || [];
-                for (const it of items) {
-                  await fetch('/api/vault', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ciphertext: it.ciphertext, iv: it.iv, title: it.title, tags: it.tags })
-                  });
-                }
-                await load();
-              } catch {
-                alert('Invalid import file');
-              }
-            }} />
-            </label>
-          </Button>
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger asChild>
               <Button>Add Item</Button>
@@ -614,8 +579,8 @@ export default function VaultPage() {
                       )}
                       {it.tags && it.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1">
-                          {it.tags.map((tag) => (
-                            <Badge key={tag} variant="outline">{tag}</Badge>
+                          {it.tags.map((tag, index) => (
+                            <Badge key={`${it._id}-${tag}-${index}`} variant="outline">{tag}</Badge>
                           ))}
                         </div>
                       )}
@@ -626,81 +591,74 @@ export default function VaultPage() {
                         </div>
                       )}
                     </div>
-                    <div>
+                    <div className="flex items-center relative">
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button variant="outline" size="icon" aria-label="Actions">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Item actions</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                        <DropdownMenuTrigger className="cursor-pointer focus:outline-none">
+                          <Button variant="outline" size="icon" aria-label="Actions" title="Item actions" className="hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring">
+                            <MoreHorizontal className="h-4 w-4 pointer-events-none" />
+                          </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem title="Copy password to clipboard" onSelect={async () => {
+                        <DropdownMenuContent align="end" className="z-50">
+                          <DropdownMenuItem key={`copy-password-${it._id}`} title="Copy password to clipboard" onSelect={async () => {
                             await copyFieldToClipboard(it.ciphertext, it.iv, 'password', it._id);
                           }}>
                             {copiedId === it._id && copiedField === 'password' ? <CheckIcon className="h-4 w-4 mr-2 text-green-600" /> : <CopyIcon className="h-4 w-4 mr-2" />}
                             {copiedId === it._id && copiedField === 'password' ? 'Copied!' : 'Copy Password'}
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem title="Copy username to clipboard" onSelect={async () => {
+                          <DropdownMenuItem key={`copy-username-${it._id}`} title="Copy username to clipboard" onSelect={async () => {
                             await copyFieldToClipboard(it.ciphertext, it.iv, 'username', it._id);
                           }}>
                             {copiedId === it._id && copiedField === 'username' ? <CheckIcon className="h-4 w-4 mr-2 text-green-600" /> : <CopyIcon className="h-4 w-4 mr-2" />}
                             {copiedId === it._id && copiedField === 'username' ? 'Copied!' : 'Copy Username'}
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem title="Copy URL to clipboard" onSelect={async () => {
+                          <DropdownMenuItem key={`copy-url-${it._id}`} title="Copy URL to clipboard" onSelect={async () => {
                             await copyFieldToClipboard(it.ciphertext, it.iv, 'url', it._id);
                           }}>
                             {copiedId === it._id && copiedField === 'url' ? <CheckIcon className="h-4 w-4 mr-2 text-green-600" /> : <CopyIcon className="h-4 w-4 mr-2" />}
                             {copiedId === it._id && copiedField === 'url' ? 'Copied!' : 'Copy URL'}
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem title="Copy notes to clipboard" onSelect={async () => {
+                          <DropdownMenuItem key={`copy-notes-${it._id}`} title="Copy notes to clipboard" onSelect={async () => {
                             await copyFieldToClipboard(it.ciphertext, it.iv, 'notes', it._id);
                           }}>
                             {copiedId === it._id && copiedField === 'notes' ? <CheckIcon className="h-4 w-4 mr-2 text-green-600" /> : <CopyIcon className="h-4 w-4 mr-2" />}
                             {copiedId === it._id && copiedField === 'notes' ? 'Copied!' : 'Copy Notes'}
                           </DropdownMenuItem>
                           
-                          <DropdownMenuSeparator />
+                          <DropdownMenuSeparator key={`separator-1-${it._id}`} />
                           
-                          <DropdownMenuItem title="Show/hide password" onSelect={async () => {
+                          <DropdownMenuItem key={`toggle-password-${it._id}`} title="Show/hide password" onSelect={async () => {
                             await togglePasswordVisibility(it.ciphertext, it.iv, it._id);
                           }}>
                             {revealedPasswords[it._id] ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
                             {revealedPasswords[it._id] ? 'Hide Password' : 'View Password'}
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem title="Open URL in new tab" onSelect={async () => {
+                          <DropdownMenuItem key={`open-url-${it._id}`} title="Open URL in new tab" onSelect={async () => {
                             await openUrl(it.ciphertext, it.iv);
                           }}>
                             <ExternalLink className="h-4 w-4 mr-2" />
                             Open URL
                           </DropdownMenuItem>
                           
-                          <DropdownMenuSeparator />
+                          <DropdownMenuSeparator key={`separator-2-${it._id}`} />
                           
-                          <DropdownMenuItem title="Create a copy of this item" onSelect={async () => {
+                          <DropdownMenuItem key={`duplicate-item-${it._id}`} title="Create a copy of this item" onSelect={async () => {
                             await duplicateItem(it.ciphertext, it.iv, it.title, it.tags);
                           }}>
                             <Files className="h-4 w-4 mr-2" />
                             Duplicate
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem onSelect={() => setEditId(it._id)}>
+                          <DropdownMenuItem key={`edit-item-${it._id}`} onSelect={() => setEditId(it._id)}>
                             Edit
                           </DropdownMenuItem>
                           
-                          <DropdownMenuSeparator />
+                          <DropdownMenuSeparator key={`separator-3-${it._id}`} />
                           
-                          <DropdownMenuItem title="Delete this item" onSelect={() => setConfirmDeleteId(it._id)} className="text-destructive">
+                          <DropdownMenuItem key={`delete-item-${it._id}`} title="Delete this item" onSelect={() => setConfirmDeleteId(it._id)} className="text-destructive">
                             <Trash2 className="h-4 w-4 mr-2" />
                             Delete
                           </DropdownMenuItem>
@@ -708,32 +666,38 @@ export default function VaultPage() {
                       </DropdownMenu>
                     </div>
                   </div>
-                  <Dialog open={editId === it._id} onOpenChange={(open) => setEditId(open ? it._id : null)}>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Edit Vault Item</DialogTitle>
-                      </DialogHeader>
-                      <InlineEdit id={it._id} ciphertext={it.ciphertext} iv={it.iv} title={it.title} tags={it.tags} onSave={editItem} />
-                    </DialogContent>
-                  </Dialog>
-                  <Dialog open={confirmDeleteId === it._id} onOpenChange={(open) => setConfirmDeleteId(open ? it._id : null)}>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Delete this item?</DialogTitle>
-                      </DialogHeader>
-                      <p className="text-sm text-muted-foreground">This action cannot be undone. The item will be permanently removed.</p>
-                      <div className="flex gap-2 justify-end">
-                        <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
-                        <Button variant="destructive" onClick={async () => { if (confirmDeleteId) { await deleteItem(confirmDeleteId); setConfirmDeleteId(null);} }}>Delete</Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
                 </CardContent>
               </Card>
             </li>
           ))}
         </ul>
       )}
+      
+      {/* Edit and Delete Dialogs - moved outside the list for better performance */}
+      {filteredItems.map((it) => (
+        <React.Fragment key={`dialog-fragment-${it._id}`}>
+          <Dialog key={`edit-dialog-${it._id}`} open={editId === it._id} onOpenChange={(open) => setEditId(open ? it._id : null)}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Edit Vault Item</DialogTitle>
+              </DialogHeader>
+              <InlineEdit id={it._id} ciphertext={it.ciphertext} iv={it.iv} title={it.title} tags={it.tags} onSave={editItem} />
+            </DialogContent>
+          </Dialog>
+          <Dialog key={`delete-dialog-${it._id}`} open={confirmDeleteId === it._id} onOpenChange={(open) => setConfirmDeleteId(open ? it._id : null)}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Delete this item?</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground">This action cannot be undone. The item will be permanently removed.</p>
+              <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
+                  <Button variant="destructive" onClick={async () => { if (confirmDeleteId) { await deleteItem(confirmDeleteId); setConfirmDeleteId(null);} }}>Delete</Button>
+                </div>
+            </DialogContent>
+          </Dialog>
+        </React.Fragment>
+      ))}
       
       {/* Re-authentication modal when encryption key is lost */}
       <ReauthModal isOpen={needsReauth} onClose={() => {}} />
