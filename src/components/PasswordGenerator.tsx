@@ -72,13 +72,66 @@ export default function PasswordGenerator() {
         <div className="grid grid-cols-2 gap-3">
           <label className="flex items-center justify-between text-sm">
             <span>Length: {length}</span>
-            <input type="range" min={8} max={64} value={length} onChange={(e) => setLength(Number(e.target.value))} />
+            <input 
+              id="password-length" 
+              name="password-length" 
+              type="range" 
+              min={8} 
+              max={64} 
+              value={length} 
+              onChange={(e) => setLength(Number(e.target.value))} 
+            />
           </label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={includeLower} onChange={(e) => setIncludeLower(e.target.checked)} /> Lowercase</label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={includeUpper} onChange={(e) => setIncludeUpper(e.target.checked)} /> Uppercase</label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={includeNumbers} onChange={(e) => setIncludeNumbers(e.target.checked)} /> Numbers</label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={includeSymbols} onChange={(e) => setIncludeSymbols(e.target.checked)} /> Symbols</label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={excludeLookalikes} onChange={(e) => setExcludeLookalikes(e.target.checked)} /> Exclude look-alikes</label>
+          <label className="flex items-center gap-2 text-sm">
+            <input 
+              id="include-lowercase" 
+              name="include-lowercase" 
+              type="checkbox" 
+              checked={includeLower} 
+              onChange={(e) => setIncludeLower(e.target.checked)} 
+            /> 
+            Lowercase
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input 
+              id="include-uppercase" 
+              name="include-uppercase" 
+              type="checkbox" 
+              checked={includeUpper} 
+              onChange={(e) => setIncludeUpper(e.target.checked)} 
+            /> 
+            Uppercase
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input 
+              id="include-numbers" 
+              name="include-numbers" 
+              type="checkbox" 
+              checked={includeNumbers} 
+              onChange={(e) => setIncludeNumbers(e.target.checked)} 
+            /> 
+            Numbers
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input 
+              id="include-symbols" 
+              name="include-symbols" 
+              type="checkbox" 
+              checked={includeSymbols} 
+              onChange={(e) => setIncludeSymbols(e.target.checked)} 
+            /> 
+            Symbols
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input 
+              id="exclude-lookalikes" 
+              name="exclude-lookalikes" 
+              type="checkbox" 
+              checked={excludeLookalikes} 
+              onChange={(e) => setExcludeLookalikes(e.target.checked)} 
+            /> 
+            Exclude look-alikes
+          </label>
         </div>
       </CardContent>
     </Card>

@@ -6,6 +6,21 @@ const nextConfig: NextConfig = {
     // Silence workspace root inference warning: explicitly set root to this app
     root: __dirname,
   },
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: process.env.NODE_ENV === 'development' 
+              ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'; object-src 'none';"
+              : "script-src 'self'; object-src 'none';"
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

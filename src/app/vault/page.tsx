@@ -12,7 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Copy as CopyIcon, Check as CheckIcon, Trash2, Settings as SettingsIcon, Upload, Download, Shield } from "lucide-react";
+import { MoreHorizontal, Copy as CopyIcon, Check as CheckIcon, Trash2, Settings as SettingsIcon, Upload, Download, Shield, Eye, EyeOff, ExternalLink, Files } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -54,6 +54,9 @@ export default function VaultPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [importExportOpen, setImportExportOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [viewPasswordId, setViewPasswordId] = useState<string | null>(null);
+  const [revealedPasswords, setRevealedPasswords] = useState<Record<string, string>>({});
   const [confirmDisable2FA, setConfirmDisable2FA] = useState(false);
 
   const load = async () => {
@@ -233,14 +236,120 @@ export default function VaultPage() {
     await load();
   };
 
-  const revealPassword = async (ciphertext: string, iv: string) => {
+  const copyFieldToClipboard = async (ciphertext: string, iv: string, field: string, itemId: string) => {
     if (!key) return alert('No encryption key in memory. Please login again.');
     try {
       const plain = await CryptoUtils.decryptItem(ciphertext, iv, key);
-      const pwdValue = (plain as Record<string, unknown>).password;
-      const pwd = typeof pwdValue === 'string' ? pwdValue : '';
-      await navigator.clipboard.writeText(pwd);
-      setTimeout(async () => { try { await navigator.clipboard.writeText(''); } catch {} }, 12000);
+      const fieldValue = (plain as Record<string, unknown>)[field];
+      const value = typeof fieldValue === 'string' ? fieldValue : '';
+      
+      if (!value) {
+        alert(`No ${field} found for this item`);
+        return;
+      }
+      
+      await navigator.clipboard.writeText(value);
+      setCopiedId(itemId);
+      setCopiedField(field);
+      setTimeout(() => {
+        setCopiedId(null);
+        setCopiedField(null);
+      }, 1500);
+      
+      // Auto-clear clipboard after 12 seconds for sensitive data
+      if (field === 'password') {
+        setTimeout(async () => { 
+          try { 
+            await navigator.clipboard.writeText(''); 
+          } catch {} 
+        }, 12000);
+      }
+    } catch {
+      alert('Failed to decrypt');
+    }
+  };
+
+  const togglePasswordVisibility = async (ciphertext: string, iv: string, itemId: string) => {
+    if (!key) return alert('No encryption key in memory. Please login again.');
+    
+    if (revealedPasswords[itemId]) {
+      // Hide password
+      setRevealedPasswords(prev => {
+        const newState = { ...prev };
+        delete newState[itemId];
+        return newState;
+      });
+    } else {
+      // Reveal password
+      try {
+        const plain = await CryptoUtils.decryptItem(ciphertext, iv, key);
+        const pwdValue = (plain as Record<string, unknown>).password;
+        const pwd = typeof pwdValue === 'string' ? pwdValue : '';
+        
+        if (!pwd) {
+          alert('No password found for this item');
+          return;
+        }
+        
+        setRevealedPasswords(prev => ({ ...prev, [itemId]: pwd }));
+        
+        // Auto-hide password after 30 seconds
+        setTimeout(() => {
+          setRevealedPasswords(prev => {
+            const newState = { ...prev };
+            delete newState[itemId];
+            return newState;
+          });
+        }, 30000);
+      } catch {
+        alert('Failed to decrypt');
+      }
+    }
+  };
+
+  const duplicateItem = async (ciphertext: string, iv: string, title?: string, tags?: string[]) => {
+    if (!key) return alert('No encryption key in memory. Please login again.');
+    try {
+      const plain = await CryptoUtils.decryptItem(ciphertext, iv, key);
+      const duplicatedItem = {
+        ...plain,
+        title: title ? `${title} (Copy)` : 'Untitled (Copy)'
+      };
+      
+      const { ciphertext: newCiphertext, iv: newIv } = await CryptoUtils.encryptItem(duplicatedItem, key);
+      const res = await fetch('/api/vault', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          ciphertext: newCiphertext, 
+          iv: newIv, 
+          title: encryptTitles ? undefined : duplicatedItem.title, 
+          tags 
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) return alert(data.error || 'Failed to duplicate');
+      await load();
+    } catch {
+      alert('Failed to decrypt original item');
+    }
+  };
+
+  const openUrl = async (ciphertext: string, iv: string) => {
+    if (!key) return alert('No encryption key in memory. Please login again.');
+    try {
+      const plain = await CryptoUtils.decryptItem(ciphertext, iv, key);
+      const urlValue = (plain as Record<string, unknown>).url;
+      const url = typeof urlValue === 'string' ? urlValue : '';
+      
+      if (!url) {
+        alert('No URL found for this item');
+        return;
+      }
+      
+      // Add protocol if missing
+      const fullUrl = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
+      window.open(fullUrl, '_blank', 'noopener,noreferrer');
     } catch {
       alert('Failed to decrypt');
     }
@@ -297,7 +406,13 @@ export default function VaultPage() {
                     <label className="cursor-pointer">
                       <Upload className="h-4 w-4 mr-1" />
                       Choose file
-                      <input type="file" accept="application/json" className="hidden" onChange={async (e) => {
+                      <input 
+                        id="vault-import-file" 
+                        name="vault-import-file" 
+                        type="file" 
+                        accept="application/json" 
+                        className="hidden" 
+                        onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
                         const text = await file.text();
@@ -440,7 +555,13 @@ export default function VaultPage() {
           <Button variant="outline" asChild>
             <label className="cursor-pointer">
               Import
-              <input type="file" accept="application/json" className="hidden" onChange={async (e) => {
+              <input 
+                id="vault-export-import-file" 
+                name="vault-export-import-file" 
+                type="file" 
+                accept="application/json" 
+                className="hidden" 
+                onChange={async (e) => {
               const file = e.target.files?.[0];
               if (!file) return;
               const text = await file.text();
@@ -498,6 +619,12 @@ export default function VaultPage() {
                           ))}
                         </div>
                       )}
+                      {revealedPasswords[it._id] && (
+                        <div className="mt-2 p-2 bg-muted rounded text-sm font-mono">
+                          <div className="text-xs text-muted-foreground mb-1">Password:</div>
+                          <div className="break-all">{revealedPasswords[it._id]}</div>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <DropdownMenu>
@@ -515,17 +642,64 @@ export default function VaultPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem title="Copy password to clipboard" onSelect={async () => {
-                            await revealPassword(it.ciphertext, it.iv);
-                            setCopiedId(it._id);
-                            setTimeout(() => setCopiedId(null), 1500);
+                            await copyFieldToClipboard(it.ciphertext, it.iv, 'password', it._id);
                           }}>
-                            {copiedId === it._id ? <CheckIcon className="h-4 w-4 mr-2 text-green-600" /> : <CopyIcon className="h-4 w-4 mr-2" />}
-                            {copiedId === it._id ? 'Copied!' : 'Copy Password'}
+                            {copiedId === it._id && copiedField === 'password' ? <CheckIcon className="h-4 w-4 mr-2 text-green-600" /> : <CopyIcon className="h-4 w-4 mr-2" />}
+                            {copiedId === it._id && copiedField === 'password' ? 'Copied!' : 'Copy Password'}
                           </DropdownMenuItem>
+                          
+                          <DropdownMenuItem title="Copy username to clipboard" onSelect={async () => {
+                            await copyFieldToClipboard(it.ciphertext, it.iv, 'username', it._id);
+                          }}>
+                            {copiedId === it._id && copiedField === 'username' ? <CheckIcon className="h-4 w-4 mr-2 text-green-600" /> : <CopyIcon className="h-4 w-4 mr-2" />}
+                            {copiedId === it._id && copiedField === 'username' ? 'Copied!' : 'Copy Username'}
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuItem title="Copy URL to clipboard" onSelect={async () => {
+                            await copyFieldToClipboard(it.ciphertext, it.iv, 'url', it._id);
+                          }}>
+                            {copiedId === it._id && copiedField === 'url' ? <CheckIcon className="h-4 w-4 mr-2 text-green-600" /> : <CopyIcon className="h-4 w-4 mr-2" />}
+                            {copiedId === it._id && copiedField === 'url' ? 'Copied!' : 'Copy URL'}
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuItem title="Copy notes to clipboard" onSelect={async () => {
+                            await copyFieldToClipboard(it.ciphertext, it.iv, 'notes', it._id);
+                          }}>
+                            {copiedId === it._id && copiedField === 'notes' ? <CheckIcon className="h-4 w-4 mr-2 text-green-600" /> : <CopyIcon className="h-4 w-4 mr-2" />}
+                            {copiedId === it._id && copiedField === 'notes' ? 'Copied!' : 'Copy Notes'}
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuSeparator />
+                          
+                          <DropdownMenuItem title="Show/hide password" onSelect={async () => {
+                            await togglePasswordVisibility(it.ciphertext, it.iv, it._id);
+                          }}>
+                            {revealedPasswords[it._id] ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+                            {revealedPasswords[it._id] ? 'Hide Password' : 'View Password'}
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuItem title="Open URL in new tab" onSelect={async () => {
+                            await openUrl(it.ciphertext, it.iv);
+                          }}>
+                            <ExternalLink className="h-4 w-4 mr-2" />
+                            Open URL
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuSeparator />
+                          
+                          <DropdownMenuItem title="Create a copy of this item" onSelect={async () => {
+                            await duplicateItem(it.ciphertext, it.iv, it.title, it.tags);
+                          }}>
+                            <Files className="h-4 w-4 mr-2" />
+                            Duplicate
+                          </DropdownMenuItem>
+                          
                           <DropdownMenuItem onSelect={() => setEditId(it._id)}>
                             Edit
                           </DropdownMenuItem>
+                          
                           <DropdownMenuSeparator />
+                          
                           <DropdownMenuItem title="Delete this item" onSelect={() => setConfirmDeleteId(it._id)} className="text-destructive">
                             <Trash2 className="h-4 w-4 mr-2" />
                             Delete
