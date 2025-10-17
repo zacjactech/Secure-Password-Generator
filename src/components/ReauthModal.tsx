@@ -41,7 +41,15 @@ export default function ReauthModal({ isOpen, onClose }: ReauthModalProps) {
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={() => {}}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!open) {
+        // Only allow closing if user has successfully authenticated
+        // or if they haven't entered anything yet
+        if (!loading) {
+          onClose();
+        }
+      }
+    }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Re-authentication Required</DialogTitle>

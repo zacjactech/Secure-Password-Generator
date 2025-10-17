@@ -24,6 +24,7 @@ export default function PasswordGenerator() {
   const [includeSymbols, setIncludeSymbols] = useState(true);
   const [excludeLookalikes, setExcludeLookalikes] = useState(true);
   const [password, setPassword] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const charset = useMemo(() => {
     let chars = "";
@@ -47,13 +48,86 @@ export default function PasswordGenerator() {
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(password);
-      setTimeout(async () => {
+      if (!password) {
+        alert('No password generated to copy');
+        return;
+      }
+      
+      console.log('Attempting to copy password:', password);
+      
+      // Try modern clipboard API first
+      if (navigator.clipboard && navigator.clipboard.writeText) {
         try {
-          await navigator.clipboard.writeText("");
-        } catch {}
-      }, 12000);
-    } catch {}
+          await navigator.clipboard.writeText(password);
+          console.log('Password copied to clipboard using modern API');
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+          
+          // Auto-clear clipboard after 12 seconds
+          setTimeout(async () => {
+            try {
+              if (navigator.clipboard && document.hasFocus()) {
+                await navigator.clipboard.writeText("");
+              } else {
+                console.log('Document not focused, skipping clipboard clear');
+              }
+            } catch (clearError) {
+              console.warn('Failed to clear clipboard:', clearError);
+            }
+          }, 12000);
+          
+          return; // Success, exit function
+        } catch (clipboardError) {
+          console.warn('Modern clipboard API failed, trying fallback:', clipboardError);
+        }
+      }
+      
+      // Fallback method using document.execCommand
+      console.log('Trying fallback clipboard method');
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = password;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        if (successful) {
+          console.log('Fallback clipboard copy successful');
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+          
+          // Auto-clear clipboard after 12 seconds (only if modern API available)
+          if (navigator.clipboard) {
+            setTimeout(async () => {
+              try {
+                if (navigator.clipboard && document.hasFocus()) {
+                  await navigator.clipboard.writeText("");
+                } else {
+                  console.log('Document not focused, skipping clipboard clear');
+                }
+              } catch (clearError) {
+                console.warn('Failed to clear clipboard:', clearError);
+              }
+            }, 12000);
+          }
+        } else {
+          console.error('Fallback clipboard copy failed');
+          alert('Failed to copy to clipboard. Please check your browser permissions or try a different browser.');
+        }
+      } catch (fallbackError) {
+        console.error('Fallback clipboard method failed:', fallbackError);
+        alert('Clipboard functionality is not available. Please check your browser permissions or try a different browser.');
+      }
+    } catch (error) {
+      console.error('Copy to clipboard failed:', error);
+      alert(`Failed to copy password: ${error instanceof Error ? error.message : 'Unknown error'}. Please check your browser permissions.`);
+    }
   };
 
   return (
@@ -67,7 +141,9 @@ export default function PasswordGenerator() {
       <CardContent className="space-y-3">
         <div className="flex items-center gap-2">
           <Input className="flex-1" value={password} readOnly />
-          <Button onClick={copy} variant="secondary">Copy</Button>
+          <Button onClick={copy} variant="secondary">
+            {copied ? 'Copied!' : 'Copy'}
+          </Button>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <label className="flex items-center justify-between text-sm">

@@ -67,7 +67,14 @@ export default function VaultPage() {
     try {
       const res = await fetch('/api/vault');
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to load');
+      if (!res.ok) {
+        if (res.status === 401) {
+          // User is not authenticated, redirect to login
+          window.location.href = '/login';
+          return;
+        }
+        throw new Error(data.error || 'Failed to load');
+      }
       console.log('Loaded items from API:', data.items);
       setItems(data.items);
     } catch (e) {
@@ -259,21 +266,72 @@ export default function VaultPage() {
 
   const copyFieldToClipboard = async (ciphertext: string, iv: string, field: string, itemId: string) => {
     console.log('copyFieldToClipboard called:', { field, itemId });
-    if (!key) return alert('No encryption key in memory. Please login again.');
+    if (!key) {
+      console.log('No encryption key available, showing re-authentication prompt');
+      alert('No encryption key in memory. Please re-enter your master password in the authentication dialog that appears.');
+      return;
+    }
+    
     try {
+      console.log('Decrypting item for field:', field);
       const plain = await CryptoUtils.decryptItem(ciphertext, iv, key);
+      console.log('Decrypted successfully, getting field value');
       const fieldValue = (plain as Record<string, unknown>)[field];
       const value = typeof fieldValue === 'string' ? fieldValue : '';
       
+      console.log('Field value:', value);
       if (!value) {
         alert(`No ${field} found for this item`);
         return;
       }
       
-      await navigator.clipboard.writeText(value);
+      console.log('Writing to clipboard...');
+      
+      // Check if clipboard API is available
+      if (!navigator.clipboard) {
+        console.log('Clipboard API not available, trying fallback method');
+        
+        // Fallback method using document.execCommand
+        try {
+          const textArea = document.createElement('textarea');
+          textArea.value = value;
+          textArea.style.position = 'fixed';
+          textArea.style.left = '-999999px';
+          textArea.style.top = '-999999px';
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          
+          const successful = document.execCommand('copy');
+          document.body.removeChild(textArea);
+          
+          if (successful) {
+            console.log('Fallback clipboard copy successful');
+          } else {
+            console.error('Fallback clipboard copy failed');
+            alert('Failed to copy to clipboard. Please check your browser permissions or try a different browser.');
+            return;
+          }
+        } catch (fallbackError) {
+          console.error('Fallback clipboard method failed:', fallbackError);
+          alert('Clipboard functionality is not available. Please check your browser permissions or try a different browser.');
+          return;
+        }
+      } else {
+        try {
+          await navigator.clipboard.writeText(value);
+          console.log('Clipboard write successful');
+        } catch (clipboardError) {
+          console.error('Clipboard write failed:', clipboardError);
+          alert(`Failed to copy to clipboard: ${clipboardError instanceof Error ? clipboardError.message : 'Unknown error'}. Please check your browser permissions.`);
+          return;
+        }
+      }
+      
       setCopiedId(itemId);
       setCopiedField(field);
       console.log('Field copied successfully:', field);
+      
       setTimeout(() => {
         setCopiedId(null);
         setCopiedField(null);
@@ -283,13 +341,19 @@ export default function VaultPage() {
       if (field === 'password') {
         setTimeout(async () => { 
           try { 
-            await navigator.clipboard.writeText(''); 
-          } catch {} 
+            if (navigator.clipboard && document.hasFocus()) {
+              await navigator.clipboard.writeText(''); 
+            } else {
+              console.log('Document not focused, skipping clipboard clear');
+            }
+          } catch (clearError) {
+            console.warn('Failed to clear clipboard:', clearError);
+          } 
         }, 12000);
       }
     } catch (error) {
-      console.error('Failed to decrypt:', error);
-      alert('Failed to decrypt');
+      console.error('Failed to copy field:', error);
+      alert(`Failed to copy ${field}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -584,9 +648,39 @@ export default function VaultPage() {
           </Dialog>
         </div>
       </div>
-      {error && <p className="text-red-600">{error}</p>}
+      {error && (
+        <div className="min-h-[60vh] grid place-items-center px-4">
+          <Card className="max-w-md w-full">
+            <CardContent className="pt-6">
+              <div className="text-destructive text-center mb-4">{error}</div>
+              {error.includes('Unauthorized') || error.includes('authentication') ? (
+                <div className="text-center">
+                  <Button onClick={() => window.location.href = '/login'} variant="default">
+                    Go to Login
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <Button onClick={load} variant="outline">
+                    Try Again
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
       {loading ? (
-        <p>Loading...</p>
+        <div className="min-h-[60vh] grid place-items-center px-4">
+          <Card className="max-w-md w-full">
+            <CardContent className="pt-6">
+              <div className="text-center text-muted-foreground">Loading vault...</div>
+              <div className="text-center text-sm text-muted-foreground mt-2">
+                Please wait while we authenticate your session...
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       ) : (
         <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredItems.map((it) => (
@@ -618,34 +712,50 @@ export default function VaultPage() {
                     </div>
                     <div className="flex items-center relative">
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild className="cursor-pointer focus:outline-none">
+                        <DropdownMenuTrigger asChild>
                           <Button variant="outline" size="icon" aria-label="Actions" title="Item actions" className="hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring">
-                            <MoreHorizontal className="h-4 w-4 pointer-events-none" />
+                            <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="z-50" onCloseAutoFocus={(e) => e.preventDefault()}>
-                          <DropdownMenuItem key={`copy-password-${it._id}`} title="Copy password to clipboard" onSelect={async () => {
+                        <DropdownMenuContent align="end" className="z-50" onInteractOutside={(e) => e.preventDefault()}>
+                          <DropdownMenuItem key={`copy-password-${it._id}`} title="Copy password to clipboard" onSelect={async (e) => {
+                            console.log('Copy password clicked for item:', it._id);
+                            e.preventDefault();
+                            e.stopPropagation();
                             await copyFieldToClipboard(it.ciphertext, it.iv, 'password', it._id);
+                          }} onClick={(e) => {
+                            console.log('Copy password onClick for item:', it._id);
+                            e.preventDefault();
+                            e.stopPropagation();
                           }}>
                             {copiedId === it._id && copiedField === 'password' ? <CheckIcon className="h-4 w-4 mr-2 text-green-600" /> : <CopyIcon className="h-4 w-4 mr-2" />}
                             {copiedId === it._id && copiedField === 'password' ? 'Copied!' : 'Copy Password'}
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem key={`copy-username-${it._id}`} title="Copy username to clipboard" onSelect={async () => {
+                          <DropdownMenuItem key={`copy-username-${it._id}`} title="Copy username to clipboard" onSelect={async (e) => {
+                            console.log('Copy username clicked for item:', it._id);
+                            e.preventDefault();
+                            e.stopPropagation();
                             await copyFieldToClipboard(it.ciphertext, it.iv, 'username', it._id);
                           }}>
                             {copiedId === it._id && copiedField === 'username' ? <CheckIcon className="h-4 w-4 mr-2 text-green-600" /> : <CopyIcon className="h-4 w-4 mr-2" />}
                             {copiedId === it._id && copiedField === 'username' ? 'Copied!' : 'Copy Username'}
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem key={`copy-url-${it._id}`} title="Copy URL to clipboard" onSelect={async () => {
+                          <DropdownMenuItem key={`copy-url-${it._id}`} title="Copy URL to clipboard" onSelect={async (e) => {
+                            console.log('Copy URL clicked for item:', it._id);
+                            e.preventDefault();
+                            e.stopPropagation();
                             await copyFieldToClipboard(it.ciphertext, it.iv, 'url', it._id);
                           }}>
                             {copiedId === it._id && copiedField === 'url' ? <CheckIcon className="h-4 w-4 mr-2 text-green-600" /> : <CopyIcon className="h-4 w-4 mr-2" />}
                             {copiedId === it._id && copiedField === 'url' ? 'Copied!' : 'Copy URL'}
                           </DropdownMenuItem>
                           
-                          <DropdownMenuItem key={`copy-notes-${it._id}`} title="Copy notes to clipboard" onSelect={async () => {
+                          <DropdownMenuItem key={`copy-notes-${it._id}`} title="Copy notes to clipboard" onSelect={async (e) => {
+                            console.log('Copy notes clicked for item:', it._id);
+                            e.preventDefault();
+                            e.stopPropagation();
                             await copyFieldToClipboard(it.ciphertext, it.iv, 'notes', it._id);
                           }}>
                             {copiedId === it._id && copiedField === 'notes' ? <CheckIcon className="h-4 w-4 mr-2 text-green-600" /> : <CopyIcon className="h-4 w-4 mr-2" />}
@@ -753,7 +863,11 @@ export default function VaultPage() {
       </Dialog>
       
       {/* Re-authentication modal when encryption key is lost */}
-      <ReauthModal isOpen={needsReauth} onClose={() => {}} />
+      <ReauthModal isOpen={needsReauth} onClose={() => {
+        // When user successfully re-authenticates, the key will be available
+        // and needsReauth will be false. No action needed here.
+        console.log('Re-authentication modal closed');
+      }} />
     </div>
   );
 }
